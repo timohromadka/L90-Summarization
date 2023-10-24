@@ -16,14 +16,16 @@ with open(args.train_data, 'r') as f:
 train_articles = [article['article'] for article in train_data]
 train_highligt_decisions = [article['greedy_n_best_indices'] for article in train_data]
 
-model.train(train_articles, train_highligt_decisions)
+preprocessed_train_articles = model.preprocess(train_articles)
+model.train(preprocessed_train_articles, train_highligt_decisions)
 
 with open(args.eval_data, 'r') as f:
     eval_data = json.load(f)
 
 
 eval_articles = [article['article'] for article in eval_data]
-summaries = model.predict(eval_articles)
+preprocessed_eval_articles = model.preprocess(eval_articles)
+summaries = model.predict(preprocessed_eval_articles)
 eval_out_data = [{'article': article, 'summary': summary} for article, summary in zip(eval_articles, summaries)]
 
 print(json.dumps(eval_out_data, indent=4))
