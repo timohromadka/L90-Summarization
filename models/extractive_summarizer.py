@@ -40,37 +40,43 @@ class ExtractiveSummarizer:
         # Binary cross-entropy loss
         return neg_log_likelihood(y_pred, y_true)
 
-    def train(self, x, y, lr=0.01, epochs=1000):
+    def train(self, x, y, lr=0.01, epochs=1000, method='sgd'):
         for epoch in range(epochs):
             # TODO:
             # implement the following:
             # 1) batch gradient descent
             # 2) stochastic gradient descent (start with this)
             # 3) Mini-batch gradient descent
-            for i in range(len(x)):
-                y_pred = self.forward(x[i])
-                error = y_pred - y[i]
+            if method == 'sgd':
+                for i in range(len(x)):
+                    y_pred = self.forward(x[i])
+                    error = y_pred - y[i]
 
-                # Compute gradient
-                dw = error * x[i]
-                db = error
+                    # Compute gradient
+                    dw = error * x[i]
+                    db = error
 
-                # Update weights and bias with SGD
-                self.weights -= lr * dw
-                self.bias -= lr * db
+                    # Update weights and bias with SGD
+                    self.weights -= lr * dw
+                    self.bias -= lr * db
 
-            # Print loss every 100 epochs
-            if epoch % 100 == 0:
-                y_preds = self.forward(x)
-                loss = self.compute_loss(y_preds, y)
-                print(f'Epoch {epoch+1}/{epochs}, Loss: {loss:.4f}')
+                # Print loss every 100 epochs
+                if epoch % 100 == 0:
+                    y_preds = self.forward(x)
+                    loss = self.compute_loss(y_preds, y)
+                    print(f'Epoch {epoch+1}/{epochs}, Loss: {loss:.4f}')
+                    
+            elif method == 'batch':
+                pass
+            elif method == 'mini_batch':
+                pass
 
     def fit_vectorizer(self, X):
         """
         X: list of list of sentences (i.e., comprising an article)
         """
-        all_sentences = [sentence for article in X for sentence in article]
         logger.info(f'Now fitting TF-IDF!')
+        all_sentences = [sentence for article in X for sentence in article]
         self.vectorizer.fit(all_sentences)
         logger.info('Done!')
 
@@ -85,13 +91,16 @@ class ExtractiveSummarizer:
         
         TODO: add scaling if necessary
         """
-    
+        logger.info(f'Transforming data to features!')
+        
         all_feature_vectors = []
 
         for article in X:
             # Use the trained vectorizer to transform the sentences into TF-IDF vectors
             tfidf_matrix = self.vectorizer.transform(article).toarray()
             all_feature_vectors.append(tfidf_matrix)
+            
+        logger.info(f'Done!')
 
         return all_feature_vectors
 
@@ -103,24 +112,24 @@ class ExtractiveSummarizer:
         TODO: all words to lowercase
         TODO: remove stopwords (optional) - lets see how this performs w/ and w/out
         """
-        
+        logger.info(f'Preprocessing data!')
         split_articles = [[s.strip() for s in x.split('.')] for x in X]
-        
+        logger.info(f'Done!')
         return split_articles
 
 
-    def train(self, X, y):
-        """
-        X: list of list of sentences (i.e., comprising an article)
-        y: list of yes/no decision for each sentence (as boolean)
-        """
+    # def train(self, X, y):
+    #     """
+    #     X: list of list of sentences (i.e., comprising an article)
+    #     y: list of yes/no decision for each sentence (as boolean)
+    #     """
         
-        for article, decisions in tqdm.tqdm(zip(X, y), desc="Validating data shape", total=len(X)):
-            assert len(article) == len(decisions), "Article and decisions must have the same length"
+    #     for article, decisions in tqdm.tqdm(zip(X, y), desc="Validating data shape", total=len(X)):
+    #         assert len(article) == len(decisions), "Article and decisions must have the same length"
 
-        """
-        TODO: Implement me!
-        """
+    #     """
+    #     TODO: Implement me!
+    #     """
         
             
 
@@ -132,9 +141,6 @@ class ExtractiveSummarizer:
         features = self.featurize(X) # featurize articles here in order to preserve original article text
         
         for article, feature_list in tqdm.tqdm(zip(X, features), desc="Running extractive summarizer"):
-            """
-            TODO: Implement me!
-            """
 
             # =================================================
             # NAIVE METHOD
@@ -154,64 +160,8 @@ class ExtractiveSummarizer:
             # =================================================
             # SUPERVISED METHOD
             
-            
             sentence_scores = [self.forward(features) for features in feature_list]
             final_sentences = [sent for sent, score in zip(article, sentence_scores) if score > 0.5] # keep just those that were deemed important
             summary = ". ".join(final_sentences)
             
             yield summary
-            
-            
-# function logistic_regression(X, y, alpha, num_iterations):
-#     m, n = shape(X)   # m is number of samples, n is number of features
-#     W = initialize_weights(n)
-#     b = 0  # Bias term
-
-#     for i in range(num_iterations):
-#         Z = dot_product(X, W) + b
-#         A = sigmoid(Z)  # Activation, where sigmoid(z) = 1 / (1 + exp(-z))
-
-#         # Compute the cost using binary cross-entropy loss
-#         cost = -1/m * sum(y * log(A) + (1-y) * log(1-A))
-
-#         # Gradient computation
-#         dW = 1/m * dot_product(transpose(X), A-y)
-#         db = 1/m * sum(A-y)
-
-#         # Update weights using gradient descent
-#         W = W - alpha * dW
-#         b = b - alpha * db
-
-#         if i % some_interval == 0:  # You can set some_interval to 100 or other value for logging
-#             print("Cost after iteration", i, ":", cost)
-
-#     return W, b
-
-# function predict(X, W, b):
-#     Z = dot_product(X, W) + b
-#     A = sigmoid(Z)
-#     predictions = empty_like(A)
-    
-#     for i in range(length(A)):
-#         if A[i] > 0.5:
-#             predictions[i] = 1
-#         else:
-#             predictions[i] = 0
-
-#     return predictions
-
-# function initialize_weights(n):
-#     return zeros(n)  # Initialize weights to zeros or small random values
-
-# function sigmoid(z):
-#     return 1 / (1 + exp(-z))
-
-# # Using the functions
-# X_train, y_train = load_training_data()
-# alpha = 0.01
-# num_iterations = 1000
-
-# W, b = logistic_regression(X_train, y_train, alpha, num_iterations)
-
-# X_test = load_test_data()
-# predictions = predict(X_test, W, b)
