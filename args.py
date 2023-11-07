@@ -35,13 +35,18 @@ parser.add_argument(
         
         'custom_features', 
         'tfidf', 
-        'embeddings', 
-        'pairwise_tfidf',
-        'pairwise_embeddings'
+        'embeddings'
     ]
 )
 
-# use the sklearn logistic regression classifier to test how it performs
+
+parser.add_argument(
+    '--pairwise', 
+    action='store_true',
+    default=False
+)
+
+
 parser.add_argument(
     '--predict_only', 
     action='store_true',
@@ -63,7 +68,7 @@ parser.add_argument(
 parser.add_argument(
     '--lr', 
     type=float,
-    default=5
+    default=0.01
 )
 
 parser.add_argument(
@@ -71,4 +76,10 @@ parser.add_argument(
     type=str,
     default='sgd',
     choices=['sgd', 'batch']
+)
+
+parser.add_argument(
+    '--top_k', 
+    type=int,
+    default=3
 )
