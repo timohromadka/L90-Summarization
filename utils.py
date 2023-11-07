@@ -4,7 +4,7 @@ import time
 # =============================
 # MISC FUNCTIONS
 # =============================
-def time_it(func):
+def time_func(func):
     def wrapper(*args, **kwargs):
         start = time.time()
         result = func(*args, **kwargs)

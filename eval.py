@@ -1,9 +1,9 @@
 import argparse
-from evaluation.rouge_evaluator import RougeEvaluator
 import json
 import logging
 import tqdm
 
+from evaluation.rouge_evaluator import RougeEvaluator
 import utils
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
