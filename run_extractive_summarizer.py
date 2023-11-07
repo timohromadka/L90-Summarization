@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 import pickle
 import tqdm
@@ -7,6 +8,8 @@ import tqdm
 from args import parser
 from models.extractive_summarizer import ExtractiveSummarizer
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def preprocess(X):
     """
@@ -15,6 +18,17 @@ def preprocess(X):
     
     split_articles = [[s.strip() for s in x.split('.')] for x in X]
     return split_articles
+       
+def load_or_featurize(data_type, articles, model, args):
+    pkl_path = f'pickled_data/{args.method}_{data_type}.pkl'
+    if os.path.exists(pkl_path):
+        with open(pkl_path, 'rb') as file:
+            featurized_articles = pickle.load(file)
+    else:
+        featurized_articles = model.featurize(articles, args)
+        with open(pkl_path, 'wb') as file:
+            pickle.dump(featurized_articles, file, pickle.HIGHEST_PROTOCOL)
+    return featurized_articles
 
 def main():
     args = args = parser.parse_args()
@@ -43,23 +57,34 @@ def main():
     
     test_articles = [article['article'] for article in test_data]
     
-    # load the features if theyre available
+    # load the features if they're available
     # if not, generate the features and save
-    def load_or_featurize(data_type, articles, model, args):
-        pkl_path = f'pickled_data/{args.method}_{data_type}.pkl'
-        if os.path.exists(pkl_path):
-            with open(pkl_path, 'rb') as file:
-                featurized_articles = pickle.load(file)
-        else:
-            featurized_articles = model.featurize(articles, args)
-            with open(pkl_path, 'wb') as file:
-                pickle.dump(featurized_articles, file, pickle.HIGHEST_PROTOCOL)
-        return featurized_articles
-
+    
     featurized_train_articles = load_or_featurize('train', train_articles, model, args)
     featurized_eval_articles = load_or_featurize('eval', eval_articles, model, args)
     featurized_test_articles = load_or_featurize('test', test_articles, model, args)
-    
+
+    def predict_and_save(featurized_articles, articles, args, type):
+        # TODO
+        # do predict only for DEV SET AS WELL!!!
+        # Run predictions using the model
+        scores, summaries = zip(*model.predict(featurized_articles, articles, args))
+
+        # Prepare the output data
+        eval_out_data = [
+            {'article': article, 'summary': summary} 
+            for article, summary 
+            in zip(articles, summaries)
+        ]
+
+
+        with open(f'{type}_prediction_file_{args.method}.json', 'w') as json_file:
+            json.dump(eval_out_data, json_file, indent=4)
+
+        # Save the scores to a pickle file
+        with open(f'pickled_scores/{type}_{args.method}_scores.pkl', 'wb') as f:
+            pickle.dump(scores, f)
+
     if args.predict_only:
         score_path = f'pickled_scores/{args.method}_scores.pkl'
         try:
@@ -69,22 +94,44 @@ def main():
             print(f"The file {score_path} was not found with method {args.method}.")
             return
         
+        
+        # VALIDATION SET
         _, summaries = zip(*model.predict_only(
             article_scores,
-            test_articles,
+            featurized_eval_articles,
+            eval_articles,
             args,
-            classification_threshold=0.10
             ))
         
         eval_out_data = [
             {'article': article, 'summary': summary} 
             for article, summary 
+            in zip(eval_articles, summaries)
+            ]
+        
+        with open(f'eval_prediction_file_{args.method}.json', 'w') as json_file:
+            json.dump(eval_out_data, json_file, indent=4)
+            
+        # TEST SET
+        _, summaries = zip(*model.predict_only(
+            article_scores,
+            featurized_test_articles,
+            test_articles,
+            args,
+            ))
+        
+        test_out_data = [
+            {'article': article, 'summary': summary} 
+            for article, summary 
             in zip(test_articles, summaries)
             ]
+        
+        with open(f'test_prediction_file_{args.method}.json', 'w') as json_file:
+            json.dump(test_out_data, json_file, indent=4)
 
-
-        print(json.dumps(eval_out_data, indent=4))
         return
+    
+    
     
     if args.method not in ['first', 'first_and_last', 'random']:
         model.set_weights(len(featurized_eval_articles[0][0]))
@@ -95,28 +142,31 @@ def main():
             eval_articles,
             eval_summaries,
             args,
-            epochs=5
             )
 
-
-
-    scores, summaries = zip(*model.predict(
-        featurized_test_articles,
-        test_articles,
-        args
-        ))
+            
+            
+            
+    # scores, summaries = zip(*model.predict(
+    #     featurized_test_articles,
+    #     test_articles,
+    #     args
+    #     ))
     
-    eval_out_data = [
-        {'article': article, 'summary': summary} 
-        for article, summary 
-        in zip(test_articles, summaries)
-        ]
+    # eval_out_data = [
+    #     {'article': article, 'summary': summary} 
+    #     for article, summary 
+    #     in zip(test_articles, summaries)
+    #     ]
 
 
-    print(json.dumps(eval_out_data, indent=4))
+    # print(json.dumps(eval_out_data, indent=4))
     
-    with open(f'pickled_scores/{args.method}_scores.pkl', 'wb') as f:
-        pickle.dump(scores, f)
+    # with open(f'pickled_scores/{args.method}_scores.pkl', 'wb') as f:
+    #     pickle.dump(scores, f)
+        
+    predict_and_save(featurized_test_articles, test_articles, args, 'test')
+    predict_and_save(featurized_eval_articles, eval_articles, args, 'eval')
 
 if __name__ == "__main__":
     main()

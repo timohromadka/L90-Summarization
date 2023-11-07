@@ -90,26 +90,28 @@ class ExtractiveSummarizer:
             features = [[np.array([random.random() for _ in range(100)]) for sentence in article] for article in X]
             return features
         
-        elif args.method in ['tfidf', 'pairwise_tfidf']:
+        elif args.method == 'tfidf':
             # implement TFIDF features
             # 1) fit tfidf vectorizer
             # 2) vectorize features!
 
             all_sentences = [sentence for article in X for sentence in article]
-            self.tfidf_vectorizer = TfidfVectorizer(
-                stop_words='english',
-                max_features=1000
-                )
-            self.tfidf_vectorizer.fit(all_sentences)
-            logger.info('TF-IDF Vectorizer fitted.')
+            
+            # initialize if not fitted already
+            if self.tfidf_vectorizer is None:
+                self.tfidf_vectorizer = TfidfVectorizer(
+                    stop_words='english',
+                    max_features=1000
+                    )
+                self.tfidf_vectorizer.fit(all_sentences)
+                logger.info('TF-IDF Vectorizer fitted.')
                 
-            # if args.method == 'tfidf':
             features = [self.tfidf_vectorizer.transform(article).toarray() for article in tqdm.tqdm(X, desc='Computing TF-IDF features')]
 
             return features
             
-        elif args.method in ['embeddings', 'pairwise_embeddings']:
-            model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
+        elif args.method == 'embeddings':
+            model = SentenceTransformer('all-MiniLM-L6-v2') # paraphrase-MiniLM-L3-v2, all-mpnet-base-v2
 
             all_sentences = [sentence for article in X for sentence in article]
 
@@ -143,7 +145,7 @@ class ExtractiveSummarizer:
             logger.warning(f'Unrecognized argument: {args.method=}')
         
 
-    def train(self, X_train, y_train, X_articles, eval_summaries, args, epochs=3, gd='sgd', lr=0.01):
+    def train(self, X_train, y_train, X_articles, eval_summaries, args):
         """
         X: list of list of sentences (i.e., comprising an article)
         y: list of yes/no decision for each sentence (as boolean)
@@ -153,7 +155,7 @@ class ExtractiveSummarizer:
             assert len(article) == len(decisions), "Article and decisions must have the same length"
 
         logger.info(f'Beginning Training!')
-        for epoch in range(epochs):
+        for epoch in range(args.epochs):
             combined = list(zip(X_train, y_train))
             random.shuffle(combined)
             X_train[:], y_train[:] = zip(*combined)
@@ -161,7 +163,7 @@ class ExtractiveSummarizer:
             total_loss = 0
             count = 0
             
-            if gd == 'sgd':
+            if args.gd == 'sgd':
                 for i in tqdm.tqdm(range(len(X_train)), desc='Iterating over each article'): # for each article
                     for j in range(len(X_train[i])): # for each sentence in each article
                         y_pred = self.forward(X_train[i][j])
@@ -172,8 +174,8 @@ class ExtractiveSummarizer:
                         db = error
 
                         # Update weights and bias with SGD
-                        self.weights -= lr * dw
-                        self.bias -= lr * db
+                        self.weights -= args.lr * dw
+                        self.bias -= args.lr * db
                         
                         # Accumulate loss
                         total_loss += self.compute_loss(y_pred, y_train[i][j])
@@ -186,7 +188,7 @@ class ExtractiveSummarizer:
             
                 
 
-    def predict(self, article_features, articles, args, classification_threshold=0.10):
+    def predict(self, article_features, articles, args):
         """
         X: list of list of sentences (i.e., comprising an article)
         """
@@ -217,32 +219,45 @@ class ExtractiveSummarizer:
                 
                 yield sentence_scores, summary
                 
-                
-            elif args.method == 'pairwise':
-                # finish this if time permits
-                # Pairwise cosine similarity matching
-                # Each sentence gets matched with 
-                yield "", ""
-                
             else:                  
                 # use logistic regression + feature vectors for classification
                 sentence_scores = [self.forward(feature_vec) for feature_vec in article_feature]
-                final_sentences = [sent for sent, score in zip(article, sentence_scores) if score > classification_threshold] # keep just those that were deemed important
+                final_sentences = [sent for sent, score in zip(article, sentence_scores) if score > args.classification_threshold] # keep just those that were deemed important
                 summary = ". ".join(final_sentences)
                 
                 # we will also yield sentence scores, in case we would like to test with a new classification threshold
                 yield sentence_scores, summary
     
-    def predict_only(self, article_scores, articles, args, classification_threshold=0.10):
+    def predict_only(self, article_scores, article_features, articles, args):
         """
         X: list of list of sentences (i.e., comprising an article)
         """
         
         articles = self.preprocess(articles) # we must perform this additional step
         
-        for article_score, article in tqdm.tqdm(zip(article_scores, articles), desc="Running extractive summarizer on pre-computed sentence scores"):
-            final_sentences = [sent for sent, score in zip(article, article_score) if score > classification_threshold] # keep just those that were deemed important
-            summary = ". ".join(final_sentences)
+        if args.pairwise:
+            for article_feature, article in tqdm.tqdm(zip(article_features, articles), desc="Running pairwise comparisons on pre-computed sentences features."):
+                article_feature = np.array(article_feature)
+                
+                # compute cos sim matrix
+                # cos sim = a dot b / ||a|| ||b||
+                norms = np.linalg.norm(article_feature, axis=1, keepdims=True)
+                normalized_embeddings = article_feature / norms
+                cosine_similarity_matrix = np.dot(normalized_embeddings, normalized_embeddings.T)
+
+                avg_sims = np.sum(cosine_similarity_matrix, axis=1)
+                top_indices = avg_sims.argsort()[::-1][:args.top_k]
+                final_sentences = [article[i] for i in top_indices]
+                summary = ". ".join(final_sentences)
+                
+                yield avg_sims, summary
+        
+        else: #elif args.method in ['embeddings', 'tfidf']:
+            for article_score, article in tqdm.tqdm(zip(article_scores, articles), desc="Running extractive summarizer on pre-computed sentence scores."):
             
-            # we will also yield sentence scores, in case we would like to test with a new classification threshold
-            yield article_score, summary    
+                    final_sentences = [sent for sent, score in zip(article, article_score) if score > args.classification_threshold] # keep just those that were deemed important
+                    summary = ". ".join(final_sentences)
+                    
+                    # we will also yield sentence scores, in case we would like to test with a new classification threshold
+                    yield article_score, summary    
+            
