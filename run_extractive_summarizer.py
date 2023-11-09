@@ -65,13 +65,10 @@ def main():
     featurized_test_articles = load_or_featurize('test', test_articles, model, args)
 
     def predict_and_save(featurized_articles, articles, args, type):
-        # TODO
-        # do predict only for DEV SET AS WELL!!!
-        # Run predictions using the model
         scores, summaries = zip(*model.predict(featurized_articles, articles, args))
 
         # Prepare the output data
-        eval_out_data = [
+        out_data = [
             {'article': article, 'summary': summary} 
             for article, summary 
             in zip(articles, summaries)
@@ -79,25 +76,33 @@ def main():
 
 
         with open(f'{type}_prediction_file_{args.method}.json', 'w') as json_file:
-            json.dump(eval_out_data, json_file, indent=4)
+            json.dump(out_data, json_file, indent=4)
 
         # Save the scores to a pickle file
         with open(f'pickled_scores/{type}_{args.method}_scores.pkl', 'wb') as f:
             pickle.dump(scores, f)
 
     if args.predict_only:
-        score_path = f'pickled_scores/{args.method}_scores.pkl'
+        eval_score_path = f'pickled_scores/eval_{args.method}_scores.pkl'
         try:
-            with open(score_path, 'rb') as file:
-                article_scores = pickle.load(file)
+            with open(eval_score_path, 'rb') as file:
+                eval_article_scores = pickle.load(file)
         except FileNotFoundError:
-            print(f"The file {score_path} was not found with method {args.method}.")
+            print(f"The file {eval_score_path} was not found with method {args.method}.")
+            return
+        
+        test_score_path = f'pickled_scores/test_{args.method}_scores.pkl'
+        try:
+            with open(test_score_path, 'rb') as file:
+                test_article_scores = pickle.load(file)
+        except FileNotFoundError:
+            print(f"The file {test_score_path} was not found with method {args.method}.")
             return
         
         
         # VALIDATION SET
         _, summaries = zip(*model.predict_only(
-            article_scores,
+            eval_article_scores,
             featurized_eval_articles,
             eval_articles,
             args,
@@ -109,12 +114,12 @@ def main():
             in zip(eval_articles, summaries)
             ]
         
-        with open(f'eval_prediction_file_{args.method}.json', 'w') as json_file:
+        with open(f'eval_prediction_file_{args.method}_{args.pairwise}.json', 'w') as json_file:
             json.dump(eval_out_data, json_file, indent=4)
             
         # TEST SET
         _, summaries = zip(*model.predict_only(
-            article_scores,
+            test_article_scores,
             featurized_test_articles,
             test_articles,
             args,
@@ -126,7 +131,7 @@ def main():
             in zip(test_articles, summaries)
             ]
         
-        with open(f'test_prediction_file_{args.method}.json', 'w') as json_file:
+        with open(f'test_prediction_file_{args.method}_{args.pairwise}.json', 'w') as json_file:
             json.dump(test_out_data, json_file, indent=4)
 
         return
@@ -172,5 +177,5 @@ if __name__ == "__main__":
     main()
     
 # EXAMPLE USAGE
-# python run_extractive_summarizer.py --train_data data/train.greedy_sent.json --test_data data/test.json --eval_data data/validation.json --method first > test_prediction_file_first_3.json
-# python eval.py --eval_data data/test.json --pred_data test_prediction_file_first_3.json
+# python run_extractive_summarizer.py --train_data data/train.greedy_sent.json --eval_data data/validation.json --test_data data/test.json --method tfidf --lr 0.1 --epochs 5
+# python eval.py --eval_data data/validation.json --pred_data eval_prediction_file_tfidf.json --run_name tfidf_lr01_ep5

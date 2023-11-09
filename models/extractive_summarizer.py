@@ -7,24 +7,38 @@ import re
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import spacy
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def sigmoid(x, clip=False):
+nlp = spacy.load("en_core_web_sm")
+
+
+def sigmoid(x, clip=True):
     if clip:
         x = np.clip(x, -500, 500)
     return 1 / (1 + np.exp(-x))
 
-def neg_log_likelihood(y_pred: List[float], y_true: List[float], clip=False) -> float:
+def neg_log_likelihood(y_pred: List[float], y_true: List[float], clip=True) -> float:
     # Binary cross-entropy loss
     if clip:
-        epsilon = 1e-15  # Small value to prevent divide by zero in log
+        epsilon = 1e-15  # prevent divide by 0
         y_pred = np.clip(y_pred, epsilon, 1 - epsilon)
     return -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
 
+
+# def get_dependencies():
+#     dependency_labels = set()
+#     for article in X:
+#         for sentence in article:
+#             labels = parse(sentence).get_dependency_labels()
+#             dependency_labels.update(labels)
+    
+#     label_index = {label: idx for idx, label in enumerate(dependency_labels)}
+    
+#     return label_index
 
 class ExtractiveSummarizer:
     
@@ -70,14 +84,19 @@ class ExtractiveSummarizer:
             for article in tqdm.tqdm(X, desc='Transforming data to features!'):
                 sentence_vectors = []
                 for i, sentence in enumerate(article):
+
+                    doc = nlp(sentence)
+                    num_named_entities = len(doc.ents)
+                    
                     # Compute the additional features
                     custom_features = np.array([
                         len(sentence),
                         len(sentence.split()),
                         i,
-                        len(re.findall(r'\d', sentence)),  # Number of digits
-                        sentence.count(':'),               # Number of colons
-                        len(re.findall(r'[^\w\s]', sentence))  # Number of punctuation characters
+                        len(re.findall(r'\d', sentence)),       # Number of digits
+                        sentence.count(':'),                    # Number of colons
+                        len(re.findall(r'[^\w\s]', sentence)),  # Number of punctuation characters
+                        num_named_entities                      # Number of named entities
                     ])
                     sentence_vectors.append(custom_features)
                 all_feature_vectors.append(sentence_vectors)
@@ -91,10 +110,6 @@ class ExtractiveSummarizer:
             return features
         
         elif args.method == 'tfidf':
-            # implement TFIDF features
-            # 1) fit tfidf vectorizer
-            # 2) vectorize features!
-
             all_sentences = [sentence for article in X for sentence in article]
             
             # initialize if not fitted already
@@ -252,7 +267,7 @@ class ExtractiveSummarizer:
                 
                 yield avg_sims, summary
         
-        else: #elif args.method in ['embeddings', 'tfidf']:
+        else: # pass through logistic regression
             for article_score, article in tqdm.tqdm(zip(article_scores, articles), desc="Running extractive summarizer on pre-computed sentence scores."):
             
                     final_sentences = [sent for sent, score in zip(article, article_score) if score > args.classification_threshold] # keep just those that were deemed important

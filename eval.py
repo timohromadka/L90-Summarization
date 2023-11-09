@@ -1,7 +1,10 @@
 import argparse
 import json
 import logging
+import os
 import tqdm
+
+import pandas as pd
 
 from evaluation.rouge_evaluator import RougeEvaluator
 import utils
@@ -13,8 +16,9 @@ logger = logging.getLogger(__name__)
 @utils.time_func
 def main():
     args = argparse.ArgumentParser()
-    args.add_argument('--pred_data', type=str, default='data/validation.json')
+    args.add_argument('--pred_data', type=str, default='eval_prediction_file_custom_features.json')
     args.add_argument('--eval_data', type=str, default='data/validation.json')
+    args.add_argument('--run_name', type=str, required=True, help="Name of the current run for tracking")
     args = args.parse_args()
 
     evaluator = RougeEvaluator()
@@ -33,14 +37,21 @@ def main():
         pred_sums.append(pred['summary'])
         eval_sums.append(eval['summary'])
 
-
     scores = evaluator.batch_score(pred_sums, eval_sums)
+    
+    flattened_scores = {f"{main_key}-{sub_key}": sub_value
+                        for main_key, sub_dict in scores.items()
+                        for sub_key, sub_value in sub_dict.items()}
 
-    for k, v in scores.items():
-        print(k)
-        print("\tPrecision:\t", v["p"])
-        print("\tRecall:\t\t", v["r"])
-        print("\tF1:\t\t", v["f"])
+    df_scores = pd.DataFrame(list(flattened_scores.values()), index=flattened_scores.keys()).transpose()
+    df_scores['run_name'] = args.run_name
+    
+    csv_file_path = 'results.csv'
+    
+    if os.path.exists(csv_file_path):
+        df_scores.to_csv(csv_file_path, mode='a', header=False, index=False)
+    else:
+        df_scores.to_csv(csv_file_path, mode='w', header=True, index=False)
     
 if __name__ == "__main__":
     main()
