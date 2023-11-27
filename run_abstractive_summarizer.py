@@ -16,21 +16,25 @@ def main():
         # "train_data": "data/train.json",
         # "validation_data": "data/validation.json",
         # "eval_data": "data/test.json",
-        'ntoken': 128,
-        'd_model': 128,
+        'd_model': 512,
         'nhead': 4,
         'd_hid': 512,
         'nlayers': 2,
-        'dropout': 0.1
+        'dropout': 0.1,
+        'tokenizer': 'wordpiece',
+        'learning_rate': 0.001,
+        'num_epochs': 10,
+        'grad_acc': 1,
+        'batch_size': 32
     }
 
     model = AbstractiveSummarizer(
-        hparams['ntoken'], 
         hparams['d_model'], 
         hparams['nhead'], 
         hparams['d_hid'], 
         hparams['nlayers'], 
-        hparams['dropout']
+        hparams['dropout'],
+        hparams['tokenizer'],
         )
 
     with open(args.train_data, 'r') as f:
@@ -45,8 +49,17 @@ def main():
     val_articles = [article['article'] for article in validation_data]
     val_summaries = [article['summary'] for article in validation_data]
 
-    model.init_vocabulary(train_articles)
-    model.train(train_articles, train_summaries, val_articles, val_summaries)
+    # model.init_vocabulary(train_articles)
+    model.train(
+        train_articles, 
+        train_summaries, 
+        val_articles,
+        val_summaries,
+        learning_rate=hparams['learning_rate'],
+        batch_size=hparams['batch_size'], 
+        grad_acc=hparams['grad_acc'], 
+        num_epochs=hparams['num_epochs'],
+    )
 
     with open(args.test_data, 'r') as f:
         test_data = json.load(f)
