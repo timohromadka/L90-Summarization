@@ -7,7 +7,7 @@ import tqdm
 import pandas as pd
 
 from evaluation.rouge_evaluator import RougeEvaluator
-import utils
+import validation.utils as utils
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

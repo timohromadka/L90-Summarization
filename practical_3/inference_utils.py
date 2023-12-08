@@ -1,6 +1,6 @@
 import torch
-from utils import generate_square_subsequent_mask, DEVICE
-from CustomTokenizer import CustomTokenizer
+from validation.utils import generate_square_subsequent_mask, DEVICE
+from validation.CustomTokenizer import CustomTokenizer
 
 import torch.nn.functional as F
 
