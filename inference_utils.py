@@ -1,6 +1,9 @@
 import torch
 from utils import generate_square_subsequent_mask, DEVICE
 from CustomTokenizer import CustomTokenizer
+
+import torch.nn.functional as F
+
 # function to generate output sequence using greedy algorithm
 def greedy_decode(model, src, src_mask, max_len, start_symbol, end_symbol):
 
